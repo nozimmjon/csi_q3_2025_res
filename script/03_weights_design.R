@@ -32,7 +32,7 @@ reweigh_survey <- final_survey_data %>%
 sample_data <- reweigh_survey %>%
   mutate(age = as.numeric(as.character(age)),
          age_group = cut(age,
-                         breaks = c(-Inf, 29, 49, 65, Inf),
+                         breaks = c(-Inf, 30, 50, 66, Inf),
                          labels = c("18-29","30-49","50-65","Over 65"),
                          right = FALSE)) %>%
   select(-population)
@@ -55,12 +55,24 @@ sample_props <- sample_data %>%
 
 combined <- pop_f %>%
   left_join(sample_props, by = c("district","age_group","gender")) %>%
-  mutate(post_weight = pop_prop / sample_prop)
+  mutate(
+    post_weight = ifelse(is.na(sample_prop) | sample_prop == 0, 1, pop_prop / sample_prop)
+  )
 
 sample_data_weighted <- sample_data %>%
   left_join(combined %>% select(district, age_group, gender, post_weight),
             by = c("district","age_group","gender")) %>%
-  mutate(final_weight = new_weight * post_weight)
+  mutate(
+    post_weight  = ifelse(is.na(post_weight), 1, post_weight),
+    final_weight = new_weight * post_weight
+  )
+
+n_fallback <- sum(sample_data_weighted$post_weight == 1 &
+                  !is.na(sample_data_weighted$new_weight))
+if (n_fallback > 0) {
+  message(n_fallback,
+          " respondents received post_weight=1 (no population cell match or empty sample cell)")
+}
 
 # Survey design (your structure)
 design <- svydesign(

@@ -195,17 +195,7 @@ overall_district <- svy_design %>%
 eval_district <- bind_rows(eval_district, overall_district)
 
 # ----- Employment (regional + overall) -----
-svy_design <- svy_design %>%
-  mutate(is_official = case_when(
-    is_official %in% c("Йўқ","Йуқ") ~ "Йўқ",
-    TRUE ~ as.character(is_official)
-  ))
-
 employment_status <- svy_design %>%
-  mutate(is_official = case_when(
-    is_official %in% c("Йўқ","Йуқ") ~ "Йўқ",
-    TRUE ~ as.character(is_official)
-  )) %>% 
   filter(is_working != "Пенсиядаман") %>%
   group_by(region, is_working) %>%
   summarize(percentage = survey_mean(vartype = NULL) * 100, .groups="drop") %>%
@@ -219,10 +209,6 @@ employment_status <- svy_design %>%
   select(region, "Йўқ","Ҳа")
 
 overall_employment <- svy_design %>%
-  mutate(is_official = case_when(
-    is_official %in% c("Йўқ","Йуқ") ~ "Йўқ",
-    TRUE ~ as.character(is_official)
-  )) %>% 
   filter(is_working != "Пенсиядаман") %>%
   group_by(is_working) %>%
   summarize(percentage = survey_mean(vartype = NULL) * 100, .groups="drop") %>%
@@ -240,10 +226,6 @@ employment_status <- bind_rows(employment_status, overall_employment)
 
 
 employment_status_district <- svy_design %>%
-  mutate(is_official = case_when(
-    is_official %in% c("Йўқ","Йуқ") ~ "Йўқ",
-    TRUE ~ as.character(is_official)
-  )) %>% 
   filter(is_working != "Пенсиядаман") %>%
   group_by(district, is_working) %>%
   summarize(percentage = survey_mean(vartype = NULL) * 100, .groups = "drop") %>%
@@ -351,14 +333,14 @@ categorize_income <- function(income) {
   )
 }
 
-svy_design <- svy_design %>%
+svy_income <- svy_design %>%
   mutate(
     income = as.numeric(stringr::str_replace_all(income, " ", "")),
     income_group = categorize_income(income)
   ) %>%
   filter(!is.na(income_group))
 
-overall_percentages <- svy_design %>%
+overall_percentages <- svy_income %>%
   group_by(income_group) %>%
   summarize(percentage = survey_mean(na.rm = TRUE, vartype = NULL) * 100, .groups = "drop") %>%
   mutate(region = "Республика бўйича ўртача") %>%
@@ -371,7 +353,7 @@ overall_percentages <- svy_design %>%
   mutate(across(-region, ~ round(., 0))) %>%
   select(region, "Даромади мавжуд эмас","1 млн сўмгача","1-3 млн","3 млн сўмдан баланд")
 
-inc_gen <- svy_design %>%
+inc_gen <- svy_income %>%
   group_by(region, income_group) %>%
   summarize(percentage = survey_mean(na.rm = TRUE, vartype = NULL) * 100, .groups = "drop") %>%
   select(region, income_group, percentage) %>%
@@ -384,7 +366,7 @@ inc_gen <- svy_design %>%
   mutate(across(-region, ~ round(.,0))) %>%
   bind_rows(overall_percentages)
 
-inc_dis <- svy_design %>%
+inc_dis <- svy_income %>%
   group_by(district, income_group) %>%
   summarize(percentage = survey_mean(na.rm = TRUE, vartype = NULL) * 100, .groups = "drop") %>%
   select(district, income_group, percentage) %>%

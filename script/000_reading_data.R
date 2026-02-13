@@ -2,12 +2,10 @@ library(readxl)
 library(dplyr)
 library(here)
 library(tidyverse)
-library(readxl)
 library(lubridate)
 library(stringr)
 library(janitor)
 library(skimr)
-library(here)
 library(knitr)
 library(writexl)
 library(rlang)
@@ -20,11 +18,6 @@ library(srvyr)
 library(webshot2)
 library(gt)
 library(ggrepel)
-
-Mode <- function(x) {
-  ux <- unique(x)
-  ux[which.max(tabulate(match(x, ux)))]
-}
 
 # Step 1: List files
 file_paths <- list.files(

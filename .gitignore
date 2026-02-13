@@ -4,3 +4,6 @@
 .httr-oauth
 .DS_Store
 .quarto
+
+# Data files (binary, should not be in version control)
+*.xlsx

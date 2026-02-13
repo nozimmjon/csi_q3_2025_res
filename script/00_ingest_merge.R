@@ -19,17 +19,17 @@ data_dir <- here::here("data")
 file_paths <- list.files(data_dir, pattern = "\\.xlsx$", full.names = TRUE)
 message("Found: ", length(file_paths), " files")
 
-# quick sanity checks (console)
-col_counts <- sapply(file_paths, \(p) length(names(read_excel(p))))
-print(table(col_counts))
-dup_cols <- sapply(file_paths, \(p){ any(duplicated(names(read_excel(p)))) })
-if (any(dup_cols)) { cat("🚨 Duplicate colnames in:\n"); print(file_paths[dup_cols]) }
-
+# Read once, then run sanity checks on already-loaded data
 df_list <- lapply(file_paths, function(path){
   df <- read_excel(path)
   names(df) <- sapply(names(df), standardize_name)
   df
 })
+
+col_counts <- sapply(df_list, ncol)
+print(table(col_counts))
+dup_cols <- sapply(df_list, \(df) any(duplicated(names(df))))
+if (any(dup_cols)) { cat("Duplicate colnames in:\n"); print(file_paths[dup_cols]) }
 
 all_cols <- Reduce(union, lapply(df_list, names))
 

@@ -26,23 +26,23 @@ d_01 <- df_all %>%
   tidyr::drop_na(district) %>%
   relocate(income, .before = q_1) %>%
   mutate(
-    district = dplyr::recode(district,
-                             # --- your full recode list (unchanged) ---
-                             "Бўз" = "Бўстон",
-                             "Жиззах" = "Шароф Рашидов",
-                             "Хаваст" = "Ховос",
-                             "Чирчиқ шаҳар" = "Чирчиқ ш.",
-                             "Чиноз тумани" = "Чиноз", 
-                             "Қибрай тумани" = "Қибрай", 
-                             "Янгийўл шаҳар" = "Янгийўл ш.",
-                             "Турткўл" = "Тўрткўл",
-                             "Янги хаёт" = "Янгиҳаёт"
-                             ),
+    district = case_match(district,
+                          "Бўз"           ~ "Бўстон",
+                          "Жиззах"        ~ "Шароф Рашидов",
+                          "Хаваст"        ~ "Ховос",
+                          "Чирчиқ шаҳар"  ~ "Чирчиқ ш.",
+                          "Чиноз тумани"  ~ "Чиноз",
+                          "Қибрай тумани"  ~ "Қибрай",
+                          "Янгийўл шаҳар" ~ "Янгийўл ш.",
+                          "Турткўл"       ~ "Тўрткўл",
+                          "Янги хаёт"     ~ "Янгиҳаёт",
+                          .default = district
+                          ),
     region = region |> as.character() |> str_replace_all("[\\r\\n\\t]+", " ") |> str_squish()
   ) %>%
   filter(!district %in% c("Давлатобод", "Ғозғон шаҳри")) %>%
   filter(gender %in% c("Эркак", "Аёл")) 
 
 # write_xlsx(d_01, here::here("25_01_Cons_sent_jan.xlsx"))
-# assign("d_01", d_01, envir = .GlobalEnv)
-# message("✅ d_01 saved and ready.")
+assign("d_01", d_01, envir = .GlobalEnv)
+message("d_01 ready: ", nrow(d_01), " rows x ", ncol(d_01), " cols")
