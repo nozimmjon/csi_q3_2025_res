@@ -63,3 +63,4 @@ message("✅ df_all ready: ", nrow(df_all), " rows x ", ncol(df_all), " cols")
 
 col_counts <- sapply(df_list, ncol)
 file_paths[col_counts == 20]
+

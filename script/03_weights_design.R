@@ -23,15 +23,18 @@ library(readr)
 stopifnot(exists("d_01"))
 
 # --- 1) Merge sample sizes -------------------------------------------------
-sample_size_data <- read_excel(here::here("sample_size.xlsx"))
+sample_size_data <- read_excel(here::here("sample_size.xlsx")) %>%
+  mutate(code = as.character(code))
 
 # Validate population data has required columns
-if (!all(c("district", "population") %in% names(sample_size_data))) {
-  stop("sample_size.xlsx must contain 'district' and 'population' columns")
+if (!all(c("code", "population") %in% names(sample_size_data))) {
+  stop("sample_size.xlsx must contain 'code' and 'population' columns")
 }
 
-unmatched_svy    <- setdiff(d_01$district, sample_size_data$district)
-unmatched_sample <- setdiff(sample_size_data$district, d_01$district)
+d_01 <- d_01 %>% mutate(district = as.character(district))
+
+unmatched_svy    <- setdiff(d_01$district, sample_size_data$code)
+unmatched_sample <- setdiff(sample_size_data$code, d_01$district)
 
 if (length(unmatched_svy) > 0) {
   warning(
@@ -47,7 +50,8 @@ if (length(unmatched_sample) > 0) {
   )
 }
 
-final_survey_data <- d_01 %>% left_join(sample_size_data, by = "district")
+final_survey_data <- d_01 %>%
+  left_join(sample_size_data %>% select(code, population), by = c("district" = "code"))
 
 # --- 2) Base weight by actual sample size -----------------------------------
 reweigh_survey <- final_survey_data %>%
@@ -74,13 +78,14 @@ sample_data <- reweigh_survey %>%
 
 # --- 4) Post-stratification using population_age_group.xlsx -----------------
 population_data <- readxl::read_xlsx(here::here("population_age_group.xlsx")) %>%
-  dplyr::select(district_id, district, age_group, gender, population) %>%
-  dplyr::rename(Freq = population)
+  dplyr::select(district_id, age_group, gender, population) %>%
+  dplyr::rename(Freq = population) %>%
+  dplyr::mutate(district_id = as.character(district_id))
 
 sample_districts <- unique(sample_data$district)
 pop_f <- population_data %>%
-  filter(district %in% sample_districts) %>%
-  group_by(district) %>%
+  filter(district_id %in% sample_districts) %>%
+  group_by(district_id) %>%
   mutate(pop_prop = Freq / sum(Freq)) %>%
   ungroup()
 
@@ -92,7 +97,7 @@ sample_props <- sample_data %>%
   mutate(sample_prop = n / district_total)
 
 combined <- pop_f %>%
-  left_join(sample_props, by = c("district", "age_group", "gender")) %>%
+  left_join(sample_props, by = c("district_id" = "district", "age_group", "gender")) %>%
   mutate(
     post_weight = ifelse(is.na(sample_prop) | sample_prop == 0, 1, pop_prop / sample_prop)
   )
@@ -100,8 +105,8 @@ combined <- pop_f %>%
 # --- 5) Join post-weights and compute final weight --------------------------
 sample_data_weighted <- sample_data %>%
   left_join(
-    combined %>% select(district, age_group, gender, post_weight),
-    by = c("district", "age_group", "gender")
+    combined %>% select(district_id, age_group, gender, post_weight),
+    by = c("district" = "district_id", "age_group", "gender")
   ) %>%
   mutate(
     post_weight  = ifelse(is.na(post_weight), 1, post_weight),
@@ -127,7 +132,7 @@ if (n_bad > 0) {
     mutate(
       final_weight = ifelse(
         is.na(final_weight) | is.infinite(final_weight),
-        new_weight,
+        ifelse(is.na(new_weight) | is.infinite(new_weight), 1, new_weight),
         final_weight
       )
     )
