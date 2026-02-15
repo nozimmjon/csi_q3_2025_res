@@ -31,7 +31,7 @@ if (!all(c("code", "population") %in% names(sample_size_data))) {
   stop("sample_size.xlsx must contain 'code' and 'population' columns")
 }
 
-d_01 <- d_01 %>% mutate(district = as.character(district))
+# d_01 <- d_01 %>% mutate(district = as.character(district))
 
 unmatched_svy    <- setdiff(d_01$district, sample_size_data$code)
 unmatched_sample <- setdiff(sample_size_data$code, d_01$district)
@@ -51,7 +51,8 @@ if (length(unmatched_sample) > 0) {
 }
 
 final_survey_data <- d_01 %>%
-  left_join(sample_size_data %>% select(code, population), by = c("district" = "code"))
+  left_join(sample_size_data, by = join_by(district_code ==code)) %>% 
+  filter(!district %in% c("Давлатобод", "Ғозғон ш."))
 
 # --- 2) Base weight by actual sample size -----------------------------------
 reweigh_survey <- final_survey_data %>%

@@ -76,8 +76,9 @@ d_01 <- df_all %>%
       str_replace_all("[\\r\\n\\t]+", " ") |>
       str_squish()
   ) %>%
-  filter(!district %in% c("Давлатобод", "Ғозғон шаҳри")) %>%
-  filter(gender %in% c("Эркак", "Аёл"))
+  filter(!district %in% c("Давлатобод", "Ғозғон ш.")) %>%
+  filter(gender %in% c("Эркак", "Аёл")) %>% 
+  rename(district_code= district)
 
 assign("d_01", d_01, envir = .GlobalEnv)
 message("d_01 ready: ", nrow(d_01), " rows x ", ncol(d_01), " cols")

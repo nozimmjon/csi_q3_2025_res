@@ -425,8 +425,7 @@ out_list <- c(
     bs_district                = final_district_scores,
     bs_district_scores         = district_balance_scores,
     income_regions             = inc_gen,
-    income_tumanlar            = inc_dis,
-    q10_by_region_percentages  = q10_by_region_wide
+    income_tumanlar            = inc_dis
   )
 )
 
