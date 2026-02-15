@@ -6,7 +6,7 @@ stopifnot(exists("df_all"))
 new_names <- c(
   "phone_number","gender","region","district","age",
   "is_working","is_official","q_1","q_2","q_3","income",
-  "q_4","q_5","q_6","q_10","q_7","tuman_hokimi","viloyat_hokimi"
+  "q_4","q_5","q_6","q_7","tuman_hokimi","viloyat_hokimi"
 )
 
 # Ensure we can set first N names, leave the rest unchanged

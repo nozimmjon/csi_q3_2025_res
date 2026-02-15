@@ -46,3 +46,7 @@ df_all <- bind_rows(df_list_aligned)
 
 assign("df_all", df_all, envir = .GlobalEnv)
 message("✅ df_all ready: ", nrow(df_all), " rows x ", ncol(df_all), " cols")
+
+
+col_counts <- sapply(df_list, ncol)
+file_paths[col_counts == 20]
