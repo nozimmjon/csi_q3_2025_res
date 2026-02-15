@@ -58,12 +58,8 @@ stopifnot(all(sapply(df_list_aligned, \(x) identical(names(x), all_cols))))
 df_all <- bind_rows(df_list_aligned)
 
 assign("df_all", df_all, envir = .GlobalEnv)
-<<<<<<< HEAD
 message("✅ df_all ready: ", nrow(df_all), " rows x ", ncol(df_all), " cols")
 
 
 col_counts <- sapply(df_list, ncol)
 file_paths[col_counts == 20]
-=======
-message("df_all ready: ", nrow(df_all), " rows x ", ncol(df_all), " cols")
->>>>>>> 38df743b61bea5c0fa55c932a2d3d725df98f984
