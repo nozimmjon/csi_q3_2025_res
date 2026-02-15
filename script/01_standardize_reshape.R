@@ -17,9 +17,9 @@ stopifnot(exists("df_all"))
 
 # --- 1) Rename columns -----------------------------------------------------
 new_names <- c(
-  "phone_number","gender","region","district","age",
-  "is_working","is_official","q_1","q_2","q_3","income",
-  "q_4","q_5","q_6","q_7","tuman_hokimi","viloyat_hokimi"
+  "phone_number", "gender", "region", "district", "age",
+  "is_working", "is_official", "q_1", "q_2", "q_3", "income",
+  "q_4", "q_5", "q_6", "q_7", "tuman_hokimi", "viloyat_hokimi"
 )
 
 # Validate that df_all has enough columns
