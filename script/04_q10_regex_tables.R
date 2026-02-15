@@ -1,5 +1,14 @@
-# 05_q10_regex_tables.R
-# Purpose: Q10 regex buckets (overall + by region), using existing srvyr design `svy_design`.
+# 04_q10_regex_tables.R
+# ---------------------------------------------------------------------------
+# Categorizes open-ended Q10 responses into 22 thematic buckets using regex
+# pattern matching on normalized Uzbek text. Produces weighted percentages
+# both overall and by region.
+#
+# Requires: svy_design (from 03_weights_design.R)
+# Key outputs (in .GlobalEnv for 04_tables_simple.R):
+#   q10_by_region_wide — region × category percentage table
+#   q10_overall        — overall category percentages (long format)
+# ---------------------------------------------------------------------------
 
 library(dplyr)
 library(stringr)
