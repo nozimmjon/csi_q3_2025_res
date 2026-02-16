@@ -1,0 +1,153 @@
+# 04_q10.R
+# ---------------------------------------------------------------------------
+# Step 4 (optional): Categorize open-ended Q7 responses into thematic
+# buckets using regex pattern matching on normalized Uzbek text.
+# Produces weighted percentages overall and by region.
+#
+# NOTE: The raw column at position 14 (labeled "q7" in our pipeline)
+# contains open-ended text that may include both positive-change
+# observations AND problem descriptions. This script focuses on
+# classifying the positive-change responses.
+#
+# Requires: svy_design (from 02_weights.R)
+# Outputs (in .GlobalEnv for 03_tables.R):
+#   q10_by_region_wide — region x category percentage table
+#   q10_overall        — overall category percentages (long format)
+# ---------------------------------------------------------------------------
+
+library(dplyr)
+library(stringr)
+library(srvyr)
+library(tidyr)
+library(scales)
+library(rlang)
+
+stopifnot(exists("svy_design"))
+
+# --- 1) Light normalizer (preserves 'Хеч' vs 'Ҳеч' distinction) ------------
+normalize_uzbek <- function(x) {
+  x %>%
+    str_replace_all('["""]', "") %>%
+    str_replace_all("['ʼ`′´'']", "'") %>%
+    str_replace_all("\\s+", " ") %>%
+    str_trim() %>%
+    str_replace_all("Маҳалл+ларни", "Маҳаллаларни") %>%
+    str_replace_all("Асосий йўл сифати яхшиланди",
+                    "Асосий йўлларнинг сифати ошди") %>%
+    str_replace_all("Фуқора", "Фуқаро") %>%
+    str_replace_all("Фуқаро билмаслигни айтди",
+                    "Фуқаро билмаслигини айтди")
+}
+
+# --- 2) Regex buckets --------------------------------------------------------
+cat_patterns <- list(
+  "Ичимлик сув таъминоти яхшиланди" =
+    "(Ичимлик\\s*сув(и)?\\s*(келди|яхшилан(ди)?))|(^Сув\\s*таъминот(и)?\\s*яхшилан(ди)?$)|Сув\\s*келди\\s*симёғоч\\s*ўрнатилди",
+  "Электр энергия таъминоти яхшиланди" =
+    "Электр(\\s*энергия)?\\s*таъминот(и)?\\s*яхшилан(ди)?",
+  "Газ таъминоти яхшиланди" =
+    "Газ\\s*таъминот(и)?\\s*яхшилан(ди)?",
+  "Ички йўллар сифатининг ошиши" =
+    "Ички\\s*йўллар\\s*сифат(и|ининг)\\s*ошиш(и)?",
+  "Асосий йўлларнинг сифати ошди" =
+    "Асосий\\s*йўл(лар(ининг)?|)\\s*сифат(и|ининг).*(ошд(и)?|яхшилан(ди)?)",
+  "Уй-жой қурилиши кучайди" =
+    "Уй-?жой\\s*қурилиш(и)?\\s*кучайд(и)?",
+  "Аҳолини уй-жой билан таъминлаш ишлари" =
+    "Аҳолини\\s*уй-жой\\s*билан\\s*таъми(н|но)лаш",
+  "Кредит олиш осонлашди" =
+    "Кредит\\s*олиш\\s*осонлашд(и)?",
+  "Тадбиркорларни қўллаб-қувватлаш ишларини" =
+    "Тадбиркорлар(ни)?\\s*қўллаб-қувватлаш",
+  "Маҳаллаларни ободонлаштириш ишлари кучайди" =
+    "Маҳаллаларни\\s*ободонлаштириш.*кучайд(и)?",
+  "Жамоат транспорти яхшиланди" =
+    "Жамоат\\s*транспорти\\s*яхшилан(ди)?",
+  "Мактабда таълим сифатини ошириш борасидаги ишлар" =
+    "Мактабда\\s*таълим\\s*сифатини\\s*ошириш",
+  "Мактабгача таълим тизими билан қамров даражасини ошириш борасидаги ишлар" =
+    "Мактабгача\\s*таълим",
+  "Соғлиқни сақлаш хизматлари сифатини ошириш борасидаги ишлар" =
+    "Соғлиқни\\s*сақлаш\\s*хизматлари\\s*сифатини\\s*ошириш",
+  "Аҳолини иш билан таъминлаш борасидаги ишлар" =
+    "Аҳолини\\s*иш\\s*билан\\s*таъми(н|но)лаш|Иш\\s*ўринлар(и)?\\s*кўпайд(и)?",
+  "Ишлаб чиқариш яхшиланди" =
+    "Ишлаб\\s*чиқариш\\s*(яхшилан(ган|ди)|кучайди|кўпайди|соҳаси\\s*яхшиланди)",
+  "Қишлоқ хўжалиги яхшиланди" =
+    "Қишлоқ\\s*х[ўо]жалиг(и|идаги)",
+  "Чорвачилик ривожланди" =
+    "Чорвачил(ик|к)",
+  "Савдо-сотиқ соҳаси яхшиланди" =
+    "Савдо-сотиқ(\\s*соҳаси)?\\s*яхшиланди",
+  "Дўконлар кўпайди" =
+    "Дўконлар\\s*(кўпайди|қурилди)",
+  "Билмайди" =
+    "Билмаслигини\\s*айтди|Билмайди|Аниқ\\s*жавоб\\s*бера\\s*олмади"
+)
+
+build_detector <- function(pat) regex(pat, ignore_case = FALSE)
+
+# --- 3) Prepare survey subset ------------------------------------------------
+# q7 is the open-ended text column (position 14 in raw data)
+svy_q10 <- svy_design %>%
+  mutate(
+    q7_norm      = normalize_uzbek(q7),
+    has_answer   = !is.na(q7_norm) & q7_norm != "",
+    region_clean = region %>% str_replace_all("[\\r\\n\\t]+", " ") %>% str_squish()
+  ) %>%
+  filter(has_answer, !is.na(region_clean), region_clean != "")
+
+# Exact match for "no change"
+no_change_label <- "Хеч кандай узгаришлар сезмадим"
+svy_q10 <- svy_q10 %>%
+  mutate(`Хеч кандай узгаришлар сезмадим` := as.integer(q7_norm == no_change_label))
+
+# Add regex indicator columns
+for (nm in names(cat_patterns)) {
+  svy_q10 <- svy_q10 %>%
+    mutate(!!nm := as.integer(str_detect(q7_norm, build_detector(cat_patterns[[nm]]))))
+}
+
+all_cats <- c("Хеч кандай узгаришлар сезмадим", names(cat_patterns))
+
+# --- 4) Overall weighted table -----------------------------------------------
+q10_overall <- svy_q10 %>%
+  summarise(
+    across(all_of(all_cats),
+           ~ survey_mean(.x, vartype = NULL, na.rm = TRUE),
+           .names = "{.col}"),
+    respondents_wt    = survey_total(1),
+    respondents_unwtd = unweighted(n())
+  ) %>%
+  pivot_longer(all_of(all_cats),
+               names_to = "category", values_to = "pct_of_respondents") %>%
+  arrange(desc(pct_of_respondents)) %>%
+  mutate(
+    pct_label      = percent(pct_of_respondents, accuracy = 0.1),
+    wt_n_resp      = as.numeric(respondents_wt),
+    weighted_count = pct_of_respondents * wt_n_resp
+  )
+
+# --- 5) Regional percentages (wide) ------------------------------------------
+q10_by_region_long <- svy_q10 %>%
+  group_by(region_clean) %>%
+  summarise(
+    across(all_of(all_cats),
+           ~ survey_mean(.x, vartype = NULL, na.rm = TRUE),
+           .names = "{.col}"),
+    .groups = "drop"
+  ) %>%
+  pivot_longer(all_of(all_cats),
+               names_to = "category", values_to = "pct_of_respondents") %>%
+  arrange(region_clean, desc(pct_of_respondents)) %>%
+  mutate(pct_label = percent(pct_of_respondents, accuracy = 0.1))
+
+q10_by_region_wide <- q10_by_region_long %>%
+  transmute(region = region_clean, category, pct = pct_label) %>%
+  pivot_wider(id_cols = region, names_from = category, values_from = pct)
+
+# --- 6) Export to .GlobalEnv --------------------------------------------------
+assign("q10_by_region_wide", q10_by_region_wide, envir = .GlobalEnv)
+assign("q10_overall", q10_overall, envir = .GlobalEnv)
+message("[04] Q10 regex tables ready: ", nrow(q10_by_region_wide), " regions x ",
+        length(all_cats), " categories")
