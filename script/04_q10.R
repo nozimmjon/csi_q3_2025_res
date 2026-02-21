@@ -1,12 +1,17 @@
-# 04_q10_regex_tables.R
+# 04_q10.R
 # ---------------------------------------------------------------------------
-# Categorizes open-ended Q10 responses into 22 thematic buckets using regex
-# pattern matching on normalized Uzbek text. Produces weighted percentages
-# both overall and by region.
+# Step 4 (optional): Categorize open-ended Q7 responses into thematic
+# buckets using regex pattern matching on normalized Uzbek text.
+# Produces weighted percentages overall and by region.
 #
-# Requires: svy_design (from 03_weights_design.R)
-# Key outputs (in .GlobalEnv for 04_tables_simple.R):
-#   q10_by_region_wide — region × category percentage table
+# NOTE: The raw column at position 14 (labeled "q7" in our pipeline)
+# contains open-ended text that may include both positive-change
+# observations AND problem descriptions. This script focuses on
+# classifying the positive-change responses.
+#
+# Requires: svy_design (from 02_weights.R)
+# Outputs (in .GlobalEnv for 03_tables.R):
+#   q10_by_region_wide — region x category percentage table
 #   q10_overall        — overall category percentages (long format)
 # ---------------------------------------------------------------------------
 
@@ -15,22 +20,23 @@ library(stringr)
 library(srvyr)
 library(tidyr)
 library(scales)
-library(writexl)
 library(rlang)
 
 stopifnot(exists("svy_design"))
 
-# --- 1) Light normalizer (do NOT change 'Хеч' vs 'Ҳеч') ---------------------
+# --- 1) Light normalizer (preserves 'Хеч' vs 'Ҳеч' distinction) ------------
 normalize_uzbek <- function(x) {
   x %>%
-    str_replace_all('[“”"]', "") %>%
-    str_replace_all("[’ʼ`′´’']", "’") %>%
+    str_replace_all('["""]', "") %>%
+    str_replace_all("['ʼ`′´'']", "'") %>%
     str_replace_all("\\s+", " ") %>%
     str_trim() %>%
     str_replace_all("Маҳалл+ларни", "Маҳаллаларни") %>%
-    str_replace_all("Асосий йўл сифати яхшиланди", "Асосий йўлларнинг сифати ошди") %>%
+    str_replace_all("Асосий йўл сифати яхшиланди",
+                    "Асосий йўлларнинг сифати ошди") %>%
     str_replace_all("Фуқора", "Фуқаро") %>%
-    str_replace_all("Фуқаро билмаслигни айтди", "Фуқаро билмаслигини айтди")
+    str_replace_all("Фуқаро билмаслигни айтди",
+                    "Фуқаро билмаслигини айтди")
 }
 
 # --- 2) Regex buckets --------------------------------------------------------
@@ -81,37 +87,40 @@ cat_patterns <- list(
 
 build_detector <- function(pat) regex(pat, ignore_case = FALSE)
 
-# --- 3) Prep once (no re-wrapping) ------------------------------------------
-# Use svy_design directly; just normalize and keep respondents with an answer
+# --- 3) Prepare survey subset ------------------------------------------------
+# q7 is the open-ended text column (position 14 in raw data)
 svy_q10 <- svy_design %>%
   mutate(
-    q10_norm     = normalize_uzbek(q_10),
-    has_answer   = !is.na(q10_norm) & q10_norm != "",
+    q7_norm      = normalize_uzbek(q7),
+    has_answer   = !is.na(q7_norm) & q7_norm != "",
     region_clean = region %>% str_replace_all("[\\r\\n\\t]+", " ") %>% str_squish()
   ) %>%
   filter(has_answer, !is.na(region_clean), region_clean != "")
 
-# Exact match for “no change”
+# Exact match for "no change"
 no_change_label <- "Хеч кандай узгаришлар сезмадим"
 svy_q10 <- svy_q10 %>%
-  mutate(`Хеч кандай узгаришлар сезмадим` := as.integer(q10_norm == no_change_label))
+  mutate(`Хеч кандай узгаришлар сезмадим` := as.integer(q7_norm == no_change_label))
 
-# Add regex indicators
+# Add regex indicator columns
 for (nm in names(cat_patterns)) {
   svy_q10 <- svy_q10 %>%
-    mutate(!!nm := as.integer(str_detect(q10_norm, build_detector(cat_patterns[[nm]]))))
+    mutate(!!nm := as.integer(str_detect(q7_norm, build_detector(cat_patterns[[nm]]))))
 }
 
 all_cats <- c("Хеч кандай узгаришлар сезмадим", names(cat_patterns))
 
-# --- 4) Overall weighted table ----------------------------------------------
+# --- 4) Overall weighted table -----------------------------------------------
 q10_overall <- svy_q10 %>%
   summarise(
-    across(all_of(all_cats), ~ survey_mean(.x, vartype = NULL, na.rm = TRUE), .names = "{.col}"),
+    across(all_of(all_cats),
+           ~ survey_mean(.x, vartype = NULL, na.rm = TRUE),
+           .names = "{.col}"),
     respondents_wt    = survey_total(1),
     respondents_unwtd = unweighted(n())
   ) %>%
-  pivot_longer(all_of(all_cats), names_to = "category", values_to = "pct_of_respondents") %>%
+  pivot_longer(all_of(all_cats),
+               names_to = "category", values_to = "pct_of_respondents") %>%
   arrange(desc(pct_of_respondents)) %>%
   mutate(
     pct_label      = percent(pct_of_respondents, accuracy = 0.1),
@@ -119,14 +128,17 @@ q10_overall <- svy_q10 %>%
     weighted_count = pct_of_respondents * wt_n_resp
   )
 
-# --- 5) Regional percentages (wide with explicit ID) -------------------------
+# --- 5) Regional percentages (wide) ------------------------------------------
 q10_by_region_long <- svy_q10 %>%
   group_by(region_clean) %>%
   summarise(
-    across(all_of(all_cats), ~ survey_mean(.x, vartype = NULL, na.rm = TRUE), .names = "{.col}"),
+    across(all_of(all_cats),
+           ~ survey_mean(.x, vartype = NULL, na.rm = TRUE),
+           .names = "{.col}"),
     .groups = "drop"
   ) %>%
-  pivot_longer(all_of(all_cats), names_to = "category", values_to = "pct_of_respondents") %>%
+  pivot_longer(all_of(all_cats),
+               names_to = "category", values_to = "pct_of_respondents") %>%
   arrange(region_clean, desc(pct_of_respondents)) %>%
   mutate(pct_label = percent(pct_of_respondents, accuracy = 0.1))
 
@@ -134,20 +146,8 @@ q10_by_region_wide <- q10_by_region_long %>%
   transmute(region = region_clean, category, pct = pct_label) %>%
   pivot_wider(id_cols = region, names_from = category, values_from = pct)
 
-# # --- 6) Save -----------------------------------------------------------------
-# dir.create(here::here("tables"), recursive = TRUE, showWarnings = FALSE)
-# 
-# # Main output (wide by region)
-# write_xlsx(q10_by_region_wide, here::here("tables", "q10_by_region_percentages.xlsx"))
-
-# # Extra: keep overall long + regional long in one file (optional but handy)
-# writexl::write_xlsx(
-#   list(
-#     "Overall (long)"   = q10_overall,
-#     "By region (wide)" = q10_by_region_wide,
-#     "By region (long)" = q10_by_region_long
-#   ),
-#   path = here::here("tables", "q10_outputs.xlsx")
-# )
-# 
-# message("✅ Q10 regex tables written: tables/q10_by_region_percentages.xlsx and tables/q10_outputs.xlsx")
+# --- 6) Export to .GlobalEnv --------------------------------------------------
+assign("q10_by_region_wide", q10_by_region_wide, envir = .GlobalEnv)
+assign("q10_overall", q10_overall, envir = .GlobalEnv)
+message("[04] Q10 regex tables ready: ", nrow(q10_by_region_wide), " regions x ",
+        length(all_cats), " categories")
